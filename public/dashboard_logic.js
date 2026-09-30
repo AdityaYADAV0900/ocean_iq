@@ -161,14 +161,44 @@ document.addEventListener("DOMContentLoaded", () => {
         chatMessages.innerHTML += `<div class="chat-bubble chat-user"><strong>🧑‍💼 Logistics Officer:</strong><br>${text}</div>`;
         chatInput.value = '';
         
-        // Find answer
-        let answer = "I'm analyzing the maritime database for your question...";
+        const t = text.toLowerCase();
+        let answer = null;
+
+        // Expanded keyword matching across all COPILOT_KNOWLEDGE keys
         for (let key in COPILOT_KNOWLEDGE) {
-            if (text.toLowerCase().includes("demurrage") && key.includes("demurrage")) answer = COPILOT_KNOWLEDGE[key];
-            else if (text.toLowerCase().includes("haldia") && key.includes("Haldia")) answer = COPILOT_KNOWLEDGE[key];
-            else if (text.toLowerCase().includes("panamax") && key.includes("Panamax")) answer = COPILOT_KNOWLEDGE[key];
+            const k = key.toLowerCase();
+            // Check if any word from key appears in question or vice versa
+            const keyWords = k.split(/[\s,?\/]+/).filter(w => w.length > 3);
+            if (keyWords.some(w => t.includes(w))) {
+                answer = COPILOT_KNOWLEDGE[key];
+                break;
+            }
         }
-        
+
+        // Topic-based fallback matching
+        if (!answer) {
+            if (t.includes("demurrage") || t.includes("idle") || t.includes("laytime") || t.includes("waiting")) {
+                answer = COPILOT_KNOWLEDGE[Object.keys(COPILOT_KNOWLEDGE).find(k => k.toLowerCase().includes("demurrage"))] || null;
+            } else if (t.includes("haldia") || t.includes("river") || t.includes("riverine")) {
+                answer = COPILOT_KNOWLEDGE[Object.keys(COPILOT_KNOWLEDGE).find(k => k.toLowerCase().includes("haldia"))] || null;
+            } else if (t.includes("panamax") || t.includes("capesize") || t.includes("vessel") || t.includes("ship")) {
+                answer = COPILOT_KNOWLEDGE[Object.keys(COPILOT_KNOWLEDGE).find(k => k.toLowerCase().includes("panamax"))] || null;
+            } else if (t.includes("russia") || t.includes("taman") || t.includes("vostochny")) {
+                answer = COPILOT_KNOWLEDGE[Object.keys(COPILOT_KNOWLEDGE).find(k => k.toLowerCase().includes("russia"))] || null;
+            } else if (t.includes("paradip") || t.includes("vizag") || t.includes("port") || t.includes("draft") || t.includes("condition")) {
+                answer = COPILOT_KNOWLEDGE[Object.keys(COPILOT_KNOWLEDGE).find(k => k.toLowerCase().includes("port") || k.toLowerCase().includes("paradip"))] || null;
+            } else if (t.includes("freight") || t.includes("rate") || t.includes("cost") || t.includes("charter")) {
+                answer = COPILOT_KNOWLEDGE[Object.keys(COPILOT_KNOWLEDGE).find(k => k.toLowerCase().includes("freight") || k.toLowerCase().includes("rate"))] || null;
+            } else if (t.includes("australia") || t.includes("hay point") || t.includes("origin")) {
+                answer = COPILOT_KNOWLEDGE[Object.keys(COPILOT_KNOWLEDGE).find(k => k.toLowerCase().includes("australia") || k.toLowerCase().includes("origin"))] || null;
+            }
+        }
+
+        // Final fallback — generic summary
+        if (!answer) {
+            answer = "🚢 <b>SAIL Maritime Logistics DSS</b> covers:<br>• <b>Port draft constraints</b>: Haldia (8.5m), Paradip (16.5m), Vizag (14.5m), Gangavaram (18.2m)<br>• <b>Vessel classes</b>: Capesize (170k MT, 17.5m), Panamax (75k MT, 13.5m), Supramax (55k MT, 11.5m), Handysize (35k MT, 8.5m)<br>• <b>Russian coal routes</b>: Taman (Black Sea, 6200 NM) & Vostochny (Pacific, 5100 NM) with 12–18% FOB discount<br>• <b>Demurrage</b>: $22,000/day penalty for excess port stay<br><br>Try asking: <em>\"Why Panamax at Paradip?\"</em> or <em>\"Haldia constraints\"</em>";
+        }
+
         setTimeout(() => {
             chatMessages.innerHTML += `<div class="chat-bubble chat-copilot"><strong>🤖 OceanIQ Copilot:</strong><br>${answer}</div>`;
             chatMessages.scrollTop = chatMessages.scrollHeight;
