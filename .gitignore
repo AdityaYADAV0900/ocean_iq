@@ -8,4 +8,7 @@ venv/
 .venv/
 .env
 .vscode/
-node_modules
+node_modules/
+dist/
+*.db
+*.pkl
