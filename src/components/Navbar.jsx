@@ -6,8 +6,8 @@ export default function Navbar() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    // Redirect to the main dashboard
-    window.location.href = '/main_dashboard.html';
+    // Redirect to the live Render dashboard
+    window.location.href = 'https://ocean-iq.onrender.com';
   };
   return (
     <header className="navbar" style={{
