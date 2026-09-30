@@ -6,8 +6,8 @@ export default function Navbar() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    // Redirect to the public Vercel HTML dashboard
-    window.location.href = 'https://ocean-iq.vercel.app/main_dashboard.html';
+    // Redirect using a relative path so it adapts to ANY valid Vercel domain
+    window.location.href = '/main_dashboard.html';
   };
   return (
     <header className="navbar" style={{
