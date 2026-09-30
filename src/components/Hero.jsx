@@ -20,12 +20,6 @@ export default function Hero() {
               Empowering India's national steel production with mathematical fleet optimization. Predicting freight rates, enforcing dual-terminal draft constraints, and delivering prescriptive MILP fleet allocations.
             </p>
 
-            <div className="hero-cta-group">
-              <a href="#simulator" className="btn btn-primary">
-                <Zap size={18} />
-                <span>Launch Live Simulator</span>
-              </a>
-            </div>
 
             <div className="hero-hud-grid">
               <div className="hud-card">
