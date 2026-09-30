@@ -1,0 +1,1447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OceanIQ DSS Dashboard</title>
+    <link rel="stylesheet" href="dashboard_styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="plotly.min.js"></script>
+    <script>
+        if (typeof Plotly === 'undefined') {
+            document.write('<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"><\/script>');
+        }
+    </script>
+    <script src="maritime_routes.js"></script>
+    <script src="dashboard_logic.js" defer></script>
+    <style>
+        .sim-controls {
+            display: flex;
+            gap: 15px;
+            background: rgba(27, 37, 49, 0.9);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+        .sim-input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            flex: 1;
+            min-width: 200px;
+        }
+        .sim-label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+        .sim-select, .sim-slider {
+            background: var(--bg-dark);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            padding: 8px;
+            border-radius: 4px;
+            outline: none;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.85rem;
+        }
+        
+        .settings-modal {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .settings-modal.active {
+            display: flex;
+        }
+        .settings-content {
+            background: var(--bg-card);
+            padding: 30px;
+            border-radius: 10px;
+            width: 400px;
+            border: 1px solid var(--border-color);
+        }
+        .settings-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            font-weight: 700;
+            font-size: 1.2rem;
+        }
+        .close-btn {
+            cursor: pointer;
+            color: var(--text-muted);
+        }
+        .settings-row {
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .view-section {
+            display: none;
+        }
+        .view-section.active {
+            display: block;
+        }
+        
+        /* Map Container */
+        #map-container {
+            width: 100%;
+            height: 520px;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+            margin-top: 10px;
+            background: #070d18;
+        }
+        
+        .route-toggle-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+            margin-bottom: 8px;
+        }
+        .route-btn-group {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .route-chip-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            color: var(--text-muted);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.78rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s ease;
+            font-weight: 500;
+        }
+        .route-chip-btn:hover {
+            color: #fff;
+            border-color: rgba(255,255,255,0.2);
+        }
+        .route-chip-btn.active.primary {
+            background: rgba(0, 242, 254, 0.15);
+            border-color: #00F2FE;
+            color: #00F2FE;
+            box-shadow: 0 0 12px rgba(0, 242, 254, 0.25);
+        }
+        .route-chip-btn.active.alternative {
+            background: rgba(168, 85, 247, 0.15);
+            border-color: #A855F7;
+            color: #C084FC;
+            box-shadow: 0 0 12px rgba(168, 85, 247, 0.25);
+        }
+        .route-chip-btn.active.both {
+            background: rgba(56, 189, 248, 0.15);
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+            box-shadow: 0 0 12px rgba(56, 189, 248, 0.25);
+        }
+
+        /* 3D Globe Marker Specification Guide */
+        .globe-marker-guide {
+            margin-top: 14px;
+            padding: 14px 16px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+        }
+        .globe-guide-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .globe-guide-title {
+            font-size: 0.88rem;
+            font-weight: 700;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .marker-legend-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+            gap: 10px;
+        }
+        .marker-legend-card {
+            background: rgba(15, 23, 42, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 6px;
+            padding: 10px 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+        }
+        .marker-legend-card:hover {
+            border-color: rgba(56, 189, 248, 0.4);
+            background: rgba(56, 189, 248, 0.05);
+            transform: translateY(-1px);
+        }
+        .marker-symbol-badge {
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.95rem;
+            flex-shrink: 0;
+        }
+        .marker-details {
+            min-width: 0;
+            flex: 1;
+        }
+        .marker-details-title {
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: #F8FAFC;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .marker-details-desc {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            margin-top: 2px;
+            line-height: 1.3;
+        }
+        
+        /* Copilot Chat UI */
+        .chat-container {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            height: 600px;
+            display: flex;
+            flex-direction: column;
+            margin-top: 20px;
+        }
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .chat-bubble {
+            max-width: 80%;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+        .chat-user {
+            background: var(--accent-cyan);
+            color: #000;
+            align-self: flex-end;
+            border-bottom-right-radius: 0;
+        }
+        .chat-copilot {
+            background: #2a3644;
+            color: var(--text-main);
+            align-self: flex-start;
+            border-bottom-left-radius: 0;
+        }
+        .chat-input-area {
+            display: flex;
+            padding: 15px;
+            border-top: 1px solid var(--border-color);
+            gap: 10px;
+        }
+        .chat-input-area input {
+            flex: 1;
+            background: var(--bg-dark);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            padding: 10px 15px;
+            border-radius: 20px;
+            outline: none;
+        }
+        .chat-input-area button {
+            background: var(--accent-emerald);
+            color: #064e3b;
+            border: none;
+            padding: 0 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        
+        /* Table UI */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background: var(--bg-card);
+            border-radius: 10px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+        }
+        .data-table th, .data-table td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.9rem;
+        }
+        .data-table th {
+            background: rgba(255,255,255,0.05);
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+        /* Analytics Sections & Component Styling */
+        .preset-scenarios-bar {
+            display: flex;
+            gap: 10px;
+            margin-top: 14px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .preset-chip {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            padding: 7px 14px;
+            border-radius: 6px;
+            font-size: 0.78rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 500;
+        }
+        .preset-chip:hover {
+            border-color: var(--accent-cyan);
+            background: rgba(56, 189, 248, 0.08);
+            transform: translateY(-1px);
+        }
+
+        .analytics-card-section {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 18px;
+        }
+        .analytics-sec-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .sec-title-group h3 {
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .sec-title-group p {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 3px;
+        }
+
+        /* Waterline Feasibility Cards */
+        .waterline-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 14px;
+        }
+        .waterline-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 14px;
+            position: relative;
+            transition: border-color 0.2s ease;
+        }
+        .waterline-card.pass {
+            border-left: 3px solid #10B981;
+        }
+        .waterline-card.fail {
+            border-left: 3px solid #EF4444;
+        }
+        .vessel-badge-pass {
+            font-size: 0.68rem;
+            font-weight: 700;
+            color: #34D399;
+            background: rgba(16, 185, 129, 0.15);
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+        .vessel-badge-fail {
+            font-size: 0.68rem;
+            font-weight: 700;
+            color: #F87171;
+            background: rgba(239, 68, 68, 0.15);
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+        .waterline-track {
+            height: 8px;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 10px 0 6px 0;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .waterline-fill-pass {
+            height: 100%;
+            background: linear-gradient(90deg, #10B981, #34D399);
+            border-radius: 4px;
+            transition: width 0.4s ease;
+        }
+        .waterline-fill-fail {
+            height: 100%;
+            background: linear-gradient(90deg, #EF4444, #F87171);
+            border-radius: 4px;
+            transition: width 0.4s ease;
+        }
+
+        /* Strategic Timing Card */
+        .timing-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 16px;
+        }
+        @media (max-width: 900px) {
+            .timing-grid { grid-template-columns: 1fr; }
+        }
+        .timing-left {
+            background: rgba(56, 189, 248, 0.04);
+            border: 1px solid rgba(56, 189, 248, 0.2);
+            border-radius: 8px;
+            padding: 16px;
+        }
+        .timing-right {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        /* Scenario Comparison Matrix Table */
+        .scenario-table-container {
+            overflow-x: auto;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+        .scenario-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.84rem;
+        }
+        .scenario-table th {
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text-muted);
+            padding: 10px 14px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .scenario-table td {
+            padding: 10px 14px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+            color: var(--text-main);
+        }
+        .scenario-table tr:hover {
+            background: rgba(56, 189, 248, 0.03);
+        }
+        .scenario-table tr.optimal-row {
+            background: rgba(16, 185, 129, 0.08);
+            border-left: 3px solid #10B981;
+        }
+
+        /* Operational Risk Alerts */
+        .alerts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 14px;
+        }
+        .alert-card {
+            border-radius: 8px;
+            padding: 14px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            border: 1px solid;
+            background: rgba(255, 255, 255, 0.02);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .alert-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+        }
+        .alert-card.alert-warning {
+            background: rgba(245, 158, 11, 0.06);
+            border-color: rgba(245, 158, 11, 0.35);
+        }
+        .alert-card.alert-danger {
+            background: rgba(239, 68, 68, 0.06);
+            border-color: rgba(239, 68, 68, 0.35);
+        }
+        .alert-card.alert-success {
+            background: rgba(16, 185, 129, 0.06);
+            border-color: rgba(16, 185, 129, 0.35);
+        }
+        .alert-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .alert-title {
+            font-size: 0.88rem;
+            font-weight: 700;
+            color: #F8FAFC;
+        }
+        .alert-desc {
+            font-size: 0.78rem;
+            color: #CBD5E1;
+            line-height: 1.45;
+        }
+        .alert-footer {
+            font-size: 0.73rem;
+            color: var(--accent-cyan);
+            margin-top: 4px;
+            padding-top: 6px;
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        /* Module Gateway Grid on Live Simulator */
+        .module-gateway-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 16px;
+            margin-top: 22px;
+            margin-bottom: 24px;
+        }
+        .module-gateway-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+            overflow: hidden;
+        }
+        .module-gateway-card:hover {
+            border-color: var(--accent-cyan);
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px rgba(0, 242, 254, 0.12);
+            background: rgba(255, 255, 255, 0.035);
+        }
+        .module-gateway-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: transparent;
+            transition: background 0.25s ease;
+        }
+        .module-gateway-card:hover::before {
+            background: linear-gradient(90deg, var(--accent-cyan), #3b82f6);
+        }
+        .gateway-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+        .gateway-icon {
+            font-size: 1.4rem;
+            width: 42px;
+            height: 42px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+        }
+        .gateway-badge {
+            font-size: 0.68rem;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 4px;
+        }
+        .gateway-title {
+            font-size: 1.02rem;
+            font-weight: 700;
+            color: var(--text-main);
+            margin-bottom: 6px;
+        }
+        .gateway-desc {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            line-height: 1.45;
+            margin-bottom: 16px;
+        }
+        .gateway-action {
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--accent-cyan);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: auto;
+            transition: gap 0.2s ease;
+        }
+        .module-gateway-card:hover .gateway-action {
+            gap: 10px;
+            color: #38bdf8;
+        }
+
+        /* Dedicated Section Sync Header Banner */
+        .section-sync-banner {
+            background: rgba(56, 189, 248, 0.05);
+            border: 1px solid rgba(56, 189, 248, 0.2);
+            border-radius: 8px;
+            padding: 12px 18px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <i class="fa-solid fa-sailboat logo-icon"></i>
+                <span class="logo-text">OceanIQ</span>
+                <i class="fa-solid fa-bars menu-toggle"></i>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <div class="nav-section-title"><i class="fa-solid fa-border-all"></i> Main DSS</div>
+                <ul class="nav-list" id="sidebar-menu">
+                    <li class="nav-item active" data-view="simulator"><i class="fa-solid fa-compass"></i> Live Simulator</li>
+                    <li class="nav-item" data-view="feasibility"><i class="fa-solid fa-water"></i> Waterline Feasibility</li>
+                    <li class="nav-item" data-view="optimizer"><i class="fa-solid fa-chart-pie"></i> Fleet Optimizer</li>
+                    <li class="nav-item" data-view="alerts">
+                        <i class="fa-solid fa-triangle-exclamation"></i> Operational Alerts
+                        <span class="badge" id="sidebar-alert-badge" style="background:#EF4444; color:#fff; font-size:0.65rem; padding:1px 6px; border-radius:10px; margin-left:auto;">3</span>
+                    </li>
+                    <li class="nav-item" data-view="copilot"><i class="fa-solid fa-robot"></i> AI Copilot</li>
+                    <li class="nav-item" data-view="matrix"><i class="fa-solid fa-anchor"></i> Port Matrix</li>
+                </ul>
+
+                <div class="nav-section-title decints">SYSTEM</div>
+                <ul class="nav-list">
+                    <li class="nav-item" id="btn-settings"><i class="fa-solid fa-gear"></i> Global Settings</li>
+                </ul>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Top Header -->
+            <header class="top-header">
+                <div class="header-left">
+                    <span class="header-link" onclick="alert('Steel Authority of India Limited (SAIL) & RINL Maritime Operations Command')">SAIL Auth</span>
+                    <span class="header-link active" data-view="simulator" onclick="switchView('simulator')">Simulator</span>
+                    <span class="header-link" data-view="feasibility" onclick="switchView('feasibility')">Feasibility</span>
+                    <span class="header-link" data-view="optimizer" onclick="switchView('optimizer')">Optimizer</span>
+                    <span class="header-link" data-view="alerts" onclick="switchView('alerts')">Alerts</span>
+                    <span class="header-link" data-view="matrix" onclick="switchView('matrix')">Database</span>
+                    <span class="header-link" data-view="copilot" onclick="switchView('copilot')">AI Copilot</span>
+                </div>
+                <div class="header-right">
+                    <div class="search-bar">
+                        <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                        <input type="text" placeholder="Search vessels...">
+                    </div>
+                    <div class="icon-group">
+                        <div class="icon-btn" onclick="switchView('alerts')" style="cursor: pointer;" title="View Operational Demurrage & Weather Alerts"><i class="fa-regular fa-bell"></i><span class="badge" id="header-bell-badge">3</span></div>
+                        <div class="icon-btn" onclick="switchView('copilot')" style="cursor: pointer;" title="Open AI Copilot"><i class="fa-regular fa-message"></i><span class="badge">1</span></div>
+                    </div>
+                    <div class="user-profile">
+                        <span class="username">Logistics Officer <i class="fa-solid fa-chevron-down"></i></span>
+                        <img src="https://i.pravatar.cc/150?img=32" alt="User Avatar" class="avatar">
+                    </div>
+                </div>
+            </header>
+
+            <div class="dashboard-scrollable">
+                <div class="breadcrumbs">
+                    <span>Home</span> <i class="fa-solid fa-chevron-right"></i> <span>Dashboard</span> <i class="fa-solid fa-chevron-right"></i> <span class="active" id="breadcrumb-active">Live Simulator</span>
+                </div>
+
+                <!-- VIEW: SIMULATOR -->
+                <div id="view-simulator" class="view-section active">
+                    <!-- Hero Section with Simulator -->
+                    <section class="hero-section" style="background-image: linear-gradient(to right, #1b2531 35%, transparent), url('ship-bg.jpg');">
+                        <h1 class="hero-title">Autonomous Fleet Command</h1>
+                        <p class="hero-subtitle">Real-time coking coal chartering simulation. Evaluates XGBoost ML forecasts, checks water depth clearance, and solves mathematical vessel allocations.</p>
+                        
+                        <!-- Simulator Form mapped to original DSS -->
+                        <div class="sim-controls">
+                            <div class="sim-input-group">
+                                <label class="sim-label" for="sim-origin">🛫 Origin Terminal</label>
+                                <select id="sim-origin" class="sim-select">
+                                    <option value="Hay Point (Australia)" selected>Hay Point (Australia)</option>
+                                    <option value="Newcastle (Australia)">Newcastle (Australia)</option>
+                                    <option value="Taman (Russia)">Taman (Russia)</option>
+                                    <option value="Baltimore (USA)">Baltimore (USA)</option>
+                                    <option value="Kalimantan (Indonesia)">Kalimantan (Indonesia)</option>
+                                </select>
+                            </div>
+                            <div class="sim-input-group">
+                                <label class="sim-label" for="sim-dest">🛬 Indian Discharge Port</label>
+                                <select id="sim-dest" class="sim-select">
+                                    <option value="Paradip" selected>Paradip (Odisha) - 16.5m</option>
+                                    <option value="Visakhapatnam (Vizag)">Vizag (AP) - 14.5m</option>
+                                    <option value="Gangavaram">Gangavaram - 18.2m</option>
+                                    <option value="Haldia">Haldia (WB) - 8.5m</option>
+                                </select>
+                            </div>
+                            <div class="sim-input-group">
+                                <label class="sim-label">📦 Cargo Volume: <span id="vol-display" style="color:var(--accent-cyan)">75,000 MT</span></label>
+                                <input type="range" id="sim-volume" class="sim-slider" min="30000" max="200000" step="5000" value="75000">
+                            </div>
+                        </div>
+
+                        <!-- One-Click Executive Demo Scenarios Toolbar -->
+                        <div class="preset-scenarios-bar">
+                            <span style="font-size: 0.76rem; color: var(--text-muted); font-weight: 600;">⚡ One-Click Demo Presets:</span>
+                            <button class="preset-chip" onclick="applyPresetScenario('Hay Point (Australia)', 'Paradip', 150000)">
+                                <span>🇦🇺</span> Australia ➔ Paradip (150k MT Capesize)
+                            </button>
+                            <button class="preset-chip" onclick="applyPresetScenario('Taman (Russia)', 'Gangavaram', 170000)">
+                                <span>🇷🇺</span> Russia ➔ Gangavaram (170k MT Ultra-Deep)
+                            </button>
+                            <button class="preset-chip" onclick="applyPresetScenario('Baltimore (USA)', 'Haldia', 75000)">
+                                <span>🇺🇸</span> USA ➔ Haldia River (75k MT Riverine Draft Test)
+                            </button>
+                            <button class="preset-chip" onclick="applyPresetScenario('Kalimantan (Indonesia)', 'Visakhapatnam (Vizag)', 55000)">
+                                <span>🇮🇩</span> Indonesia ➔ Vizag (55k MT Supramax)
+                            </button>
+                        </div>
+                    </section>
+
+                    <!-- Stats Cards -->
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-header">
+                                <span class="stat-title">Freight Rate (XGBoost)</span>
+                                <i class="fa-solid fa-file-invoice stat-icon"></i>
+                            </div>
+                            <div class="stat-value" id="val-freight">$0.00</div>
+                            <div class="stat-change positive">Per MT Rate</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-header">
+                                <span class="stat-title">Vessel Allocation</span>
+                                <i class="fa-solid fa-ship stat-icon"></i>
+                            </div>
+                            <div class="stat-value" id="val-fleet" style="font-size:1.1rem">1x Panamax</div>
+                            <div class="stat-change positive">MILP Prescriptive</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-header">
+                                <span class="stat-title">Total Ocean Cost</span>
+                                <i class="fa-solid fa-money-bill-trend-up stat-icon"></i>
+                            </div>
+                            <div class="stat-value" id="val-cost">$0.00M</div>
+                            <div class="stat-change positive">Estimated Fleet Charter</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-header">
+                                <span class="stat-title">Congestion Demurrage</span>
+                                <i class="fa-solid fa-triangle-exclamation stat-icon"></i>
+                            </div>
+                            <div class="stat-value" id="val-demurrage">$0</div>
+                            <div class="stat-change negative">Wait Penalty</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-header">
+                                <span class="stat-title">Diversion Savings</span>
+                                <i class="fa-solid fa-shield-halved stat-icon"></i>
+                            </div>
+                            <div class="stat-value" id="val-diversion" style="color:var(--accent-emerald)">$0</div>
+                            <div class="stat-change positive">vs Gangavaram Route</div>
+                        </div>
+                        <div class="stat-card stat-card-small">
+                            <div class="stat-header">
+                                <span class="stat-title">Distance</span>
+                                <i class="fa-solid fa-route stat-icon"></i>
+                            </div>
+                            <div class="stat-value" id="val-distance" style="font-size: 1rem">0 NM</div>
+                            <div class="stat-change neutral">Nautical Miles</div>
+                        </div>
+                    </div>
+
+                    <!-- Middle Metrics Strip -->
+                    <div class="metrics-strip">
+                        <div class="metric-item">
+                            <i class="fa-solid fa-circle-check icon-emerald"></i>
+                            <div class="metric-text">
+                                <div class="m-label">Feasibility Check</div>
+                                <div class="m-value text-emerald" id="pill-title">Draft Clearance OK</div>
+                            </div>
+                        </div>
+                        <div class="metric-item" style="flex: 1;">
+                            <div class="metric-text">
+                                <div class="m-label">System Recommendation</div>
+                                <div class="m-value" id="pill-desc" style="font-size: 0.75rem; color:var(--text-muted)">-</div>
+                            </div>
+                        </div>
+                        
+                        <div class="strip-actions">
+                            <button class="btn btn-outline-cyan" onclick="alert('Running Deep PuLP MILP Optimization...')">Run DSS Optimization Pipeline <i class="fa-solid fa-arrow-pointer pointer-icon"></i></button>
+                        </div>
+                    </div>
+
+                    <!-- Charts Grid: 4 Core Visual Analytics (Clean 2x2 Layout) -->
+                    <div class="charts-grid">
+                        <div class="chart-card">
+                            <div class="chart-header">
+                                <div>
+                                    <h3 class="chart-title">📈 ML Rate Forecast (XGBoost)</h3>
+                                    <span id="forecast-rate-badge" style="font-size: 0.72rem; color: #38bdf8; font-weight: 600;">$0.00 / MT</span>
+                                </div>
+                                <span style="font-size: 0.7rem; color: var(--text-muted);">R²=92.01%</span>
+                            </div>
+                            <div class="chart-body" style="height: 180px; position: relative; width: 100%;">
+                                <canvas id="lineChart"></canvas>
+                            </div>
+                        </div>
+                        
+                        <div class="chart-card chart-card-wide">
+                            <div class="chart-header">
+                                <div>
+                                    <h3 class="chart-title">⚖️ Decision Strategy Scenarios</h3>
+                                    <span style="font-size: 0.7rem; color: var(--text-muted);">Freight ($M) vs Demurrage Risk ($k)</span>
+                                </div>
+                                <div class="legend">
+                                    <span class="legend-item"><span class="legend-color" style="background:#38bdf8;"></span> Freight ($M)</span>
+                                    <span class="legend-item"><span class="legend-color" style="background:#f87171;"></span> Demurrage ($k)</span>
+                                </div>
+                            </div>
+                            <div class="chart-body bar-chart-body" style="height: 180px; position: relative; width: 100%;">
+                                <canvas id="barChart"></canvas>
+                            </div>
+                        </div>
+
+                        <div class="chart-card">
+                            <div class="chart-header">
+                                <div>
+                                    <h3 class="chart-title">⏱️ Discharge Port Turnaround</h3>
+                                    <span style="font-size: 0.7rem; color: var(--text-muted);">Queue Wait + Discharge Time</span>
+                                </div>
+                                <span id="target-port-badge" style="font-size: 0.7rem; color: var(--accent-emerald); font-weight: 600;">Active Dest</span>
+                            </div>
+                            <div class="chart-body horiz-bar-container" id="terminal-wait-container">
+                                <!-- Populated dynamically by dashboard_logic.js -->
+                            </div>
+                        </div>
+
+                        <div class="chart-card">
+                            <div class="chart-header">
+                                <h3 class="chart-title">💰 Financial Cost Breakdown</h3>
+                                <span id="cost-per-tonne-badge" style="font-size: 0.72rem; color: #10B981; font-weight: 600;">$0/t Landed</span>
+                            </div>
+                            <div class="chart-body donut-chart-container">
+                                <div class="donut-wrapper" style="width: 100%; max-height: 120px;">
+                                    <canvas id="donutChart"></canvas>
+                                    <div class="donut-text">
+                                        <span class="donut-val" id="donut-total-val">$0.0M</span>
+                                        <span class="donut-sub">Total Voy.</span>
+                                    </div>
+                                </div>
+                                <div class="donut-legend" id="donut-legend-container">
+                                    <!-- Populated dynamically by dashboard_logic.js -->
+                                </div>
+                            </div>
+                        </div>
+                    </div> <!-- Close charts-grid -->
+
+                    <!-- SECTION: 3D GEOSPATIAL MULTI-ROUTE & NAVIGATIONAL CHOKEPOINT ENGINE -->
+                    <div class="analytics-card-section" style="margin-top: 20px;">
+                        <div class="analytics-sec-header" style="margin-bottom: 8px;">
+                            <div class="sec-title-group">
+                                <h3>🌐 Interactive Geospatial Multi-Route & Navigational Chokepoint Engine</h3>
+                                <p>Real-world oceanic routing avoiding all landmasses. Real-time comparison between Primary Deepwater corridor and Alternative Transit route.</p>
+                            </div>
+                            <div class="route-btn-group">
+                                <button class="route-chip-btn active both" id="btn-route-both" onclick="setRouteMode('both')">
+                                    <span style="font-size: 0.7rem;">✨</span> Show Both Routes
+                                </button>
+                                <button class="route-chip-btn primary" id="btn-route-primary" onclick="setRouteMode('primary')">
+                                    <span style="color: #00F2FE;">●</span> Primary Route
+                                </button>
+                                <button class="route-chip-btn alternative" id="btn-route-alt" onclick="setRouteMode('alternative')">
+                                    <span style="color: #A855F7;">●</span> Alternative Route
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Route Details Pills -->
+                        <div class="route-toggle-bar">
+                            <div id="route-pills-info" style="display: flex; gap: 10px; flex-wrap: wrap; font-size: 0.75rem;">
+                                <!-- Populated dynamically -->
+                            </div>
+                            <div style="font-size: 0.72rem; color: var(--text-muted);">
+                                <span>🖱️ Drag to rotate 3D Earth &bull; Scroll to zoom &bull; Hover on markers & routes to inspect details</span>
+                            </div>
+                        </div>
+
+                        <!-- 3D Globe Container -->
+                        <div id="map-container" style="height: 520px;"></div>
+
+                        <!-- 3D Globe Marker Specification Guide -->
+                        <div class="globe-marker-guide" style="margin-top: 20px;">
+                            <div class="globe-guide-header">
+                                <div class="globe-guide-title">
+                                    <i class="fa-solid fa-map-pin text-cyan"></i>
+                                    <span>3D Geospatial Navigation Markers & Route Specifications</span>
+                                </div>
+                                <span style="font-size: 0.72rem; color: var(--text-muted);">
+                                    Interactive Telemetry: Hover on any globe pin or line to view waypoint details, country, and navigational draft
+                                </span>
+                            </div>
+
+                            <div class="marker-legend-grid">
+                                <div class="marker-legend-card">
+                                    <div class="marker-symbol-badge" style="background: rgba(249, 115, 22, 0.15); color: #F97316; border: 1px solid rgba(249, 115, 22, 0.4);">
+                                        🛫
+                                    </div>
+                                    <div class="marker-details">
+                                        <div class="marker-details-title">
+                                            <span>Origin Loading Port</span>
+                                            <span style="font-size: 0.65rem; color: #F97316; background: rgba(249, 115, 22, 0.1); padding: 1px 5px; border-radius: 3px;">Departure</span>
+                                        </div>
+                                        <div class="marker-details-desc">
+                                            Large orange glowing circle. Deep bulk coal export terminal.
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="marker-legend-card">
+                                    <div class="marker-symbol-badge" style="background: rgba(16, 185, 129, 0.15); color: #10B981; border: 1px solid rgba(16, 185, 129, 0.4);">
+                                        🛬
+                                    </div>
+                                    <div class="marker-details">
+                                        <div class="marker-details-title">
+                                            <span>Indian Discharge Port</span>
+                                            <span style="font-size: 0.65rem; color: #10B981; background: rgba(16, 185, 129, 0.1); padding: 1px 5px; border-radius: 3px;">Arrival</span>
+                                        </div>
+                                        <div class="marker-details-desc">
+                                            Large emerald glowing diamond. SAIL/RINL intake steel port.
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="marker-legend-card">
+                                    <div class="marker-symbol-badge" style="background: rgba(0, 242, 254, 0.15); color: #00F2FE; border: 1px solid rgba(0, 242, 254, 0.4);">
+                                        🔵
+                                    </div>
+                                    <div class="marker-details">
+                                        <div class="marker-details-title">
+                                            <span style="color: #00F2FE;">Primary Deepwater Corridor</span>
+                                            <span style="font-size: 0.65rem; color: #00F2FE; background: rgba(0, 242, 254, 0.1); padding: 1px 5px; border-radius: 3px;">Solid Line</span>
+                                        </div>
+                                        <div class="marker-details-desc">
+                                            Cyan track & circular pins. 100% zero-land ocean navigation.
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="marker-legend-card">
+                                    <div class="marker-symbol-badge" style="background: rgba(168, 85, 247, 0.15); color: #C084FC; border: 1px solid rgba(168, 85, 247, 0.4);">
+                                        🟣
+                                    </div>
+                                    <div class="marker-details">
+                                        <div class="marker-details-title">
+                                            <span style="color: #C084FC;">Alternative Transit Corridor</span>
+                                            <span style="font-size: 0.65rem; color: #C084FC; background: rgba(168, 85, 247, 0.1); padding: 1px 5px; border-radius: 3px;">Dashed Line</span>
+                                        </div>
+                                        <div class="marker-details-desc">
+                                            Violet track & diamond pins. Alternate passage / canal checkpoints.
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="marker-legend-card">
+                                    <div class="marker-symbol-badge" style="background: rgba(148, 163, 184, 0.15); color: #94A3B8; border: 1px solid rgba(148, 163, 184, 0.4);">
+                                        ⚓
+                                    </div>
+                                    <div class="marker-details">
+                                        <div class="marker-details-title">
+                                            <span>Global Maritime Terminals</span>
+                                            <span style="font-size: 0.65rem; color: #94A3B8; background: rgba(255, 255, 255, 0.05); padding: 1px 5px; border-radius: 3px;">Nodes</span>
+                                        </div>
+                                        <div class="marker-details-desc">
+                                            Slate markers. Major global dry bulk trading berths.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Module Gateway Grid: 1-Click Launchpad to Specialized Operational Sections -->
+                    <div style="margin-top: 25px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                            <h3 style="font-size: 1.05rem; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
+                                <i class="fa-solid fa-compass text-cyan"></i> Specialized Operational Modules & Deep Analytics
+                            </h3>
+                            <span style="font-size: 0.72rem; color: var(--text-muted);">Select any module to inspect dedicated analysis</span>
+                        </div>
+                        <p style="font-size: 0.76rem; color: var(--text-muted); margin-bottom: 14px;">
+                            Full decision support breakdown across waterline clearance, mathematical fleet solver, and port congestion surveillance.
+                        </p>
+
+                        <div class="module-gateway-grid">
+                            <div class="module-gateway-card" onclick="switchView('feasibility')">
+                                <div class="gateway-header">
+                                    <div class="gateway-icon" style="color: #10B981;">
+                                        <i class="fa-solid fa-water"></i>
+                                    </div>
+                                    <span class="gateway-badge" style="background: rgba(16, 185, 129, 0.12); color: #34D399;">UKC & Draft Clear</span>
+                                </div>
+                                <div class="gateway-title">🚢 Waterline Feasibility Matrix</div>
+                                <div class="gateway-desc">
+                                    Dual-port depth verification evaluating 4 vessel classes (Handysize, Supramax, Panamax, Capesize) against origin and Indian port LOA/draft rules.
+                                </div>
+                                <div class="gateway-action">
+                                    <span>Inspect Vessel Clearances</span> <i class="fa-solid fa-arrow-right"></i>
+                                </div>
+                            </div>
+
+                            <div class="module-gateway-card" onclick="switchView('optimizer')">
+                                <div class="gateway-header">
+                                    <div class="gateway-icon" style="color: #F59E0B;">
+                                        <i class="fa-solid fa-chart-pie"></i>
+                                    </div>
+                                    <span class="gateway-badge" style="background: rgba(245, 158, 11, 0.12); color: #FBBF24;">PuLP MILP Solver</span>
+                                </div>
+                                <div class="gateway-title">📊 Fleet Optimization & Scenarios</div>
+                                <div class="gateway-desc">
+                                    Mixed-Integer Linear Programming comparing Spot vs 7-Day Wait vs Gangavaram Diversion vs Split Batches with strategic COA contract timing.
+                                </div>
+                                <div class="gateway-action">
+                                    <span>Open Optimizer Matrix</span> <i class="fa-solid fa-arrow-right"></i>
+                                </div>
+                            </div>
+
+                            <div class="module-gateway-card" onclick="switchView('alerts')">
+                                <div class="gateway-header">
+                                    <div class="gateway-icon" style="color: #EF4444;">
+                                        <i class="fa-solid fa-triangle-exclamation"></i>
+                                    </div>
+                                    <span class="gateway-badge" style="background: rgba(239, 68, 68, 0.12); color: #F87171;">Surveillance Active</span>
+                                </div>
+                                <div class="gateway-title">⏱️ Port Demurrage Risk Radar</div>
+                                <div class="gateway-desc">
+                                    Continuous queue monitoring, laytime breach exposure, Baltic Dry Index volatility, monsoon swell tracking, and 6-port surveillance table.
+                                </div>
+                                <div class="gateway-action">
+                                    <span>View Demurrage Radar</span> <i class="fa-solid fa-arrow-right"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div> <!-- Close view-simulator -->
+
+                <!-- VIEW: WATERLINE FEASIBILITY -->
+                <div id="view-feasibility" class="view-section">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 15px; margin-bottom: 20px;">
+                        <div>
+                            <h2 class="hero-title" style="font-size: 1.8rem; display: flex; align-items: center; gap: 10px;">
+                                <span>🚢 Dual-Port Navigational Clearance & Waterline Depth Matrix</span>
+                            </h2>
+                            <p class="hero-subtitle">
+                                Evaluates under-keel clearance (UKC) and LOA berthing limits for both Origin Terminal and Indian Discharge Port.
+                            </p>
+                        </div>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <button class="btn btn-outline-cyan" onclick="switchView('simulator')" style="font-size: 0.76rem; padding: 6px 14px;">
+                                <i class="fa-solid fa-compass"></i> Live Simulator
+                            </button>
+                            <button class="btn btn-outline-cyan" onclick="switchView('optimizer')" style="font-size: 0.76rem; padding: 6px 14px;">
+                                <i class="fa-solid fa-chart-pie"></i> Fleet Optimizer
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Active Voyage Parameters Banner -->
+                    <div class="section-sync-banner">
+                        <div style="font-size: 0.85rem; color: #CBD5E1;">
+                            🚢 Active Simulated Voyage: <b style="color: #38BDF8;" id="feasibility-voyage-origin">Hay Point (Australia)</b> ➔ <b style="color: #10B981;" id="feasibility-voyage-dest">Paradip</b> | Cargo: <b style="color: #F8FAFC;" id="feasibility-voyage-vol">75,000 MT</b>
+                        </div>
+                        <div id="dual-port-pills" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            <!-- Populated dynamically with draft/LOA badges -->
+                        </div>
+                    </div>
+
+                    <!-- Waterline Cards Grid -->
+                    <div class="analytics-card-section" style="margin-top: 0;">
+                        <div class="analytics-sec-header">
+                            <div class="sec-title-group">
+                                <h3>📐 Vessel Class Waterline Clearance Comparison (4 Vessels)</h3>
+                                <p>Dynamic Under-Keel Clearance (UKC) calculation based on active origin loading and discharge harbor depths.</p>
+                            </div>
+                            <span style="font-size: 0.72rem; color: #34D399; background: rgba(16, 185, 129, 0.1); padding: 4px 10px; border-radius: 6px; font-weight: 600;">
+                                Strict IMO 10% UKC Margin Applied
+                            </span>
+                        </div>
+
+                        <div class="waterline-grid" id="waterline-cards-container">
+                            <!-- 4 Vessel Cards populated dynamically (Handysize, Supramax, Panamax, Capesize) -->
+                        </div>
+                    </div>
+
+                    <!-- Maritime UKC & Port Constraints Reference Box -->
+                    <div class="analytics-card-section" style="margin-top: 20px;">
+                        <div class="analytics-sec-header">
+                            <div class="sec-title-group">
+                                <h3>⚓ Port Trust Under-Keel Clearance (UKC) Regulations & Navigation Guidance</h3>
+                                <p>Regulatory depth thresholds and tidal draft restrictions enforced across Indian coal terminals.</p>
+                            </div>
+                            <span style="font-size: 0.72rem; color: #10B981; font-weight: 600; background: rgba(16, 185, 129, 0.1); padding: 4px 10px; border-radius: 6px;">
+                                Port Trust Operational Guidelines
+                            </span>
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; font-size: 0.82rem; color: #CBD5E1;">
+                            <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: 8px; padding: 14px;">
+                                <div style="font-weight: 700; color: #38BDF8; margin-bottom: 6px;">🌊 Paradip Port (Odisha)</div>
+                                <p style="line-height: 1.45; font-size: 0.78rem; color: var(--text-muted);">
+                                    Max permissible draft 16.5m (outer channel) and 14.5m (inner berths). Capesize bulkers exceeding 14.5m must discharge at deep CQ-1/CQ-2 berths during high water or perform offshore lighterage.
+                                </p>
+                            </div>
+                            <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: 8px; padding: 14px;">
+                                <div style="font-weight: 700; color: #10B981; margin-bottom: 6px;">⚓ Gangavaram Port (AP)</div>
+                                <p style="line-height: 1.45; font-size: 0.78rem; color: var(--text-muted);">
+                                    Deepest non-major bulk terminal on India's eastern seaboard with 18.2m water depth. Can accept fully-laden Capesize & Newcastlemax bulkers (up to 200,000 DWT) without lighterage.
+                                </p>
+                            </div>
+                            <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: 8px; padding: 14px;">
+                                <div style="font-weight: 700; color: #F59E0B; margin-bottom: 6px;">🚢 Visakhapatnam (Vizag)</div>
+                                <p style="line-height: 1.45; font-size: 0.78rem; color: var(--text-muted);">
+                                    Outer harbor handles up to 14.5m draft (Panamax standard). Inner harbor strictly limited to 10.5m draft with maximum 195m LOA. Capesize requires SPM or outer berths.
+                                </p>
+                            </div>
+                            <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: 8px; padding: 14px;">
+                                <div style="font-weight: 700; color: #EF4444; margin-bottom: 6px;">⚠️ Haldia Dock Complex (WB)</div>
+                                <p style="line-height: 1.45; font-size: 0.78rem; color: var(--text-muted);">
+                                    Riverine port on Hooghly estuary governed by severe tidal draft limits (8.0m to 8.5m). Capesize & Panamax vessels cannot enter fully laden; strictly limited to Handysize or double-banking barge transshipment.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div> <!-- Close view-feasibility -->
+
+                <!-- VIEW: FLEET OPTIMIZER & SCENARIOS -->
+                <div id="view-optimizer" class="view-section">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 15px; margin-bottom: 20px;">
+                        <div>
+                            <h2 class="hero-title" style="font-size: 1.8rem; display: flex; align-items: center; gap: 10px;">
+                                <span>📊 Prescriptive Fleet Allocation & Mixed-Integer Linear Programming (MILP) Optimizer</span>
+                            </h2>
+                            <p class="hero-subtitle">
+                                Mathematical optimization powered by PuLP / CBC solver to compute cost-optimal vessel chartering combinations, spot vs COA timing, and scenario sensitivities.
+                            </p>
+                        </div>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <button class="btn btn-outline-cyan" onclick="switchView('simulator')" style="font-size: 0.76rem; padding: 6px 14px;">
+                                <i class="fa-solid fa-compass"></i> Live Simulator
+                            </button>
+                            <button class="btn btn-outline-cyan" onclick="switchView('alerts')" style="font-size: 0.76rem; padding: 6px 14px;">
+                                <i class="fa-solid fa-triangle-exclamation"></i> Demurrage Radar
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Active Voyage Parameters Banner -->
+                    <div class="section-sync-banner">
+                        <div style="font-size: 0.85rem; color: #CBD5E1;">
+                            🚢 Active Simulated Voyage: <b style="color: #38BDF8;" id="opt-voyage-origin">Hay Point (Australia)</b> ➔ <b style="color: #10B981;" id="opt-voyage-dest">Paradip</b> | Cargo: <b style="color: #F8FAFC;" id="opt-voyage-vol">75,000 MT</b>
+                        </div>
+                        <div style="font-size: 0.72rem; color: #38BDF8; font-weight: 600; background: rgba(56, 189, 248, 0.1); padding: 4px 10px; border-radius: 6px;">
+                            ⚙️ PuLP CBC Linear Solver Engine
+                        </div>
+                    </div>
+
+                    <!-- Strategic Contract Timing & Market Momentum -->
+                    <div class="analytics-card-section" style="margin-top: 0; margin-bottom: 20px;">
+                        <div class="analytics-sec-header">
+                            <div class="sec-title-group">
+                                <h3>🎯 Strategic Contract Recommendation & Market Momentum</h3>
+                                <p>Algorithmic charter timing derived from 30-day forecast momentum and Baltic Dry Index (BDI) arbitrage.</p>
+                            </div>
+                            <div style="font-size: 0.72rem; color: #10B981; font-weight: 600; background: rgba(16, 185, 129, 0.1); padding: 4px 10px; border-radius: 6px;">
+                                ⚡ Real-Time Contract Advisor
+                            </div>
+                        </div>
+
+                        <div class="timing-grid">
+                            <div class="timing-left" id="timing-left-content">
+                                <!-- Populated dynamically -->
+                            </div>
+                            <div class="timing-right" id="timing-right-content">
+                                <!-- Populated dynamically -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Prescriptive MILP Scenario Matrix -->
+                    <div class="analytics-card-section">
+                        <div class="analytics-sec-header">
+                            <div class="sec-title-group">
+                                <h3>📊 Mixed-Integer Linear Programming (MILP) Scenario Matrix</h3>
+                                <p>Mathematical optimization comparing immediate chartering vs waiting vs diversion vs split batches.</p>
+                            </div>
+                            <div style="font-size: 0.72rem; color: #38BDF8; font-weight: 600; background: rgba(56, 189, 248, 0.1); padding: 4px 10px; border-radius: 6px;">
+                                ⚙️ PuLP CBC Global Solver
+                            </div>
+                        </div>
+
+                        <!-- Solver Recommendation Banner -->
+                        <div id="solver-recommendation-banner" style="background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 8px; padding: 12px 16px; margin-bottom: 14px; font-size: 0.85rem; color: #34D399; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+                            <!-- Populated dynamically -->
+                        </div>
+
+                        <!-- Scenario Matrix Table -->
+                        <div class="scenario-table-container">
+                            <table class="scenario-table">
+                                <thead>
+                                    <tr>
+                                        <th>Operational Strategy Scenario</th>
+                                        <th>Discharge Port</th>
+                                        <th>Prescriptive Fleet Allocation</th>
+                                        <th>Total Voyage Cost (USD)</th>
+                                        <th>Effective Landed Rate ($/MT)</th>
+                                        <th>Capacity Slack (MT)</th>
+                                        <th>Solver Feasibility</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="scenario-matrix-body">
+                                    <!-- Populated dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div> <!-- Close view-optimizer -->
+
+            <!-- VIEW: OPERATIONAL ALERTS & DEMURRAGE RISK RADAR -->
+            <div id="view-alerts" class="view-section">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 15px; margin-bottom: 20px;">
+                    <div>
+                        <h2 class="hero-title" style="font-size: 1.8rem; display: flex; align-items: center; gap: 10px;">
+                            <span>⏱️ Port Demurrage Risk Radar & Weather/Market Intelligence</span>
+                        </h2>
+                        <p class="hero-subtitle">
+                            Continuous surveillance of port congestion, laytime breach exposure, Baltic Dry Index volatility, and seasonal swell disruptions.
+                        </p>
+                    </div>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <span id="demurrage-alert-badge" style="font-size: 0.75rem; color: #F87171; font-weight: 700; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); padding: 6px 14px; border-radius: 6px;">
+                            ⚠️ Demurrage Watch Active
+                        </span>
+                        <button class="btn btn-outline-cyan" onclick="switchView('simulator')" style="font-size: 0.76rem; padding: 6px 14px;">
+                            <i class="fa-solid fa-compass"></i> Live Simulator
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Active Voyage Parameters Banner -->
+                <div style="background: rgba(56, 189, 248, 0.05); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 8px; padding: 12px 18px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                    <div style="font-size: 0.85rem; color: #CBD5E1;">
+                        🚢 Active Simulated Voyage: <b style="color: #38BDF8;" id="alerts-voyage-origin">Hay Point (Australia)</b> ➔ <b style="color: #10B981;" id="alerts-voyage-dest">Paradip</b> | Cargo: <b style="color: #F8FAFC;" id="alerts-voyage-vol">75,000 MT</b>
+                    </div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted);">
+                        ⚡ Synchronized in real-time with Live Simulator parameters
+                    </div>
+                </div>
+
+                <!-- 4 Demurrage KPI Cards Strip -->
+                <div class="stats-grid" style="margin-bottom: 24px;">
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <span class="stat-title">Port Queue Status</span>
+                            <i class="fa-solid fa-clock-rotate-left stat-icon" style="color: #F59E0B;"></i>
+                        </div>
+                        <div class="stat-value" id="radar-queue-status">High Congestion</div>
+                        <div class="stat-change negative" id="radar-queue-wait">4.8 days anchor wait</div>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <span class="stat-title">Total Port Stay</span>
+                            <i class="fa-solid fa-hourglass-half stat-icon" style="color: #38BDF8;"></i>
+                        </div>
+                        <div class="stat-value" id="radar-port-stay">7.8 Days</div>
+                        <div class="stat-change neutral" id="radar-stay-breakdown">3.0d discharge + 4.8d wait</div>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <span class="stat-title">Excess Laytime Penalty</span>
+                            <i class="fa-solid fa-triangle-exclamation stat-icon" style="color: #EF4444;"></i>
+                        </div>
+                        <div class="stat-value" id="radar-excess-idle" style="color: #EF4444;">3.8 Idle Days</div>
+                        <div class="stat-change negative" id="radar-daily-hire">Daily Hire: $23,000/day</div>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <span class="stat-title">Gangavaram Bypass Benefit</span>
+                            <i class="fa-solid fa-shield-halved stat-icon" style="color: #10B981;"></i>
+                        </div>
+                        <div class="stat-value" id="radar-bypass-savings" style="color: #10B981;">$87,400</div>
+                        <div class="stat-change positive">vs. Private deep fast turnaround</div>
+                    </div>
+                </div>
+
+                <!-- 3 Dynamic Operational Risk Alerts Grid -->
+                <div style="margin-bottom: 24px;">
+                    <div style="font-size: 0.95rem; font-weight: 700; color: var(--text-main); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                        <i class="fa-solid fa-bell text-cyan"></i> Live Operational Risk Alerts
+                    </div>
+                    <div class="alerts-grid" id="operational-alerts-container">
+                        <!-- Populated dynamically (Congestion Alert, BDI Volatility Alert, Monsoon Swell Alert) -->
+                    </div>
+                </div>
+
+                <!-- Port Demurrage & Congestion Surveillance Matrix Table -->
+                <div class="analytics-card-section" style="margin-top: 15px;">
+                    <div class="analytics-sec-header">
+                        <div class="sec-title-group">
+                            <h3>⚓ Indian Discharge Port Congestion & Turnaround Surveillance Matrix</h3>
+                            <p>Real-time queue monitoring, berth productivity, and demurrage exposure ratings across major steel coal terminals.</p>
+                        </div>
+                        <div style="font-size: 0.72rem; color: #38BDF8; font-weight: 600; background: rgba(56, 189, 248, 0.1); padding: 4px 10px; border-radius: 6px;">
+                            📊 6 Ports Monitored
+                        </div>
+                    </div>
+
+                    <div class="scenario-table-container">
+                        <table class="scenario-table">
+                            <thead>
+                                <tr>
+                                    <th>Discharge Port</th>
+                                    <th>State / Region</th>
+                                    <th>Max Draft (m)</th>
+                                    <th>Avg Anchor Wait (Days)</th>
+                                    <th>Discharge Productivity (TPD)</th>
+                                    <th>Port Type</th>
+                                    <th>Demurrage Risk Level</th>
+                                    <th>Strategic Mitigation</th>
+                                </tr>
+                            </thead>
+                            <tbody id="port-risk-matrix-body">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+                <!-- VIEW: COPILOT -->
+                <div id="view-copilot" class="view-section">
+                    <h2 class="hero-title" style="font-size: 1.8rem;">Logistics AI Copilot</h2>
+                    <p class="hero-subtitle">Ask questions about fleet allocations, port constraints, or demurrage risk mitigation.</p>
+                    <div class="chat-container">
+                        <div class="chat-messages" id="chat-messages">
+                            <div class="chat-bubble chat-copilot">
+                                <strong>🤖 OceanIQ Copilot:</strong><br>
+                                I am the DSS GenAI Copilot. How can I assist with your chartering decisions today? Try asking about "Why did the system allocate 2x Panamax instead of a single Capesize?"
+                            </div>
+                        </div>
+                        <div class="chat-input-area">
+                            <input type="text" id="chat-input" placeholder="Type your logistics question...">
+                            <button id="chat-send">Send</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VIEW: PORT MATRIX -->
+                <div id="view-matrix" class="view-section">
+                    <h2 class="hero-title" style="font-size: 1.8rem;">Terminal Constraints Matrix</h2>
+                    <p class="hero-subtitle">Live parameter database for dual-terminal dual-port feasibility checks.</p>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Terminal Name</th>
+                                <th>Max Draft (m)</th>
+                                <th>Average Wait (Days)</th>
+                                <th>Discharge Rate (MT/Day)</th>
+                                <th>Constraint Type</th>
+                            </tr>
+                        </thead>
+                        <tbody id="matrix-body">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Settings Modal -->
+    <div class="settings-modal" id="settingsModal">
+        <div class="settings-content">
+            <div class="settings-header">
+                <span>Global System Settings</span>
+                <i class="fa-solid fa-xmark close-btn" id="closeSettings"></i>
+            </div>
+            
+            <div class="settings-row">
+                <label>Enable Dark Mode</label>
+                <input type="checkbox" checked>
+            </div>
+            <div class="settings-row">
+                <label>XGBoost Model Endpoint</label>
+                <input type="text" value="http://localhost:5000/predict" class="sim-select" style="width: 200px;">
+            </div>
+            <div class="settings-row">
+                <label>Base Freight Rate ($/NM)</label>
+                <input type="number" value="0.0042" step="0.0001" class="sim-select" style="width: 100px;">
+            </div>
+            <button class="btn btn-primary" style="width: 100%; margin-top: 15px;" id="saveSettingsBtn">Save Configuration</button>
+        </div>
+    </div>
+</body>
+</html>
